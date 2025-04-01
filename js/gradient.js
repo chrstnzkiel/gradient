@@ -8,6 +8,7 @@ class GradientManager {
         this.defs = this.svg.querySelector('defs');
         this.mainGradient = document.getElementById('background-gradient');
         this.gradientRect = this.svg.querySelector('rect');
+        this.changeGradientButton = document.getElementById('change-gradient');
         
         // Available gradient presets
         this.gradientPresets = [
@@ -218,8 +219,104 @@ class GradientManager {
             this.mainGradient.appendChild(stopEl);
         });
         
+        // Update button style to ensure it contrasts with the current gradient
+        this.updateButtonStyle(gradientPreset.stops.map(stop => stop.color));
+        
         // Emit gradient changed event with the new colors
         this.emitGradientChangedEvent(gradientPreset.stops.map(stop => stop.color));
+    }
+    
+    // Calculate the average brightness of the gradient colors
+    calculateAverageBrightness(colors) {
+        let totalBrightness = 0;
+        
+        colors.forEach(color => {
+            // Extract RGB components
+            let r, g, b;
+            
+            // Handle hex colors
+            if (color.startsWith('#')) {
+                r = parseInt(color.slice(1, 3), 16);
+                g = parseInt(color.slice(3, 5), 16);
+                b = parseInt(color.slice(5, 7), 16);
+            } 
+            // Handle rgb/rgba colors
+            else if (color.startsWith('rgb')) {
+                const values = color.match(/\d+/g).map(Number);
+                r = values[0];
+                g = values[1];
+                b = values[2];
+            } 
+            else {
+                // Default fallback if color format isn't recognized
+                r = g = b = 128;
+            }
+            
+            // Calculate perceived brightness using the formula:
+            // (0.299*R + 0.587*G + 0.114*B)
+            // This formula considers human eye sensitivity to different colors
+            const brightness = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            totalBrightness += brightness;
+        });
+        
+        // Return average brightness between 0 and 1
+        return totalBrightness / colors.length;
+    }
+    
+    // Generate a color that contrasts with the gradient
+    generateContrastColor(colors) {
+        const brightness = this.calculateAverageBrightness(colors);
+        
+        // For darker gradients, use bright button colors
+        // For lighter gradients, use darker button colors
+        if (brightness < 0.5) {
+            // For dark backgrounds - create a bright button with dark text
+            return {
+                background: 'rgba(255, 255, 255, 0.85)',
+                text: '#000000',
+                border: 'none',
+                glow: '0 0 15px rgba(255, 255, 255, 0.7)'
+            };
+        } else {
+            // For light backgrounds - create a dark button with light text
+            return {
+                background: 'rgba(0, 0, 0, 0.75)',
+                text: '#ffffff',
+                border: 'none',
+                glow: '0 0 15px rgba(0, 0, 0, 0.7)'
+            };
+        }
+    }
+    
+    // Update the button style based on the current gradient
+    updateButtonStyle(colors) {
+        if (!this.changeGradientButton) return;
+        
+        const contrastStyle = this.generateContrastColor(colors);
+        
+        // Apply the styles to the button
+        this.changeGradientButton.style.background = contrastStyle.background;
+        this.changeGradientButton.style.color = contrastStyle.text;
+        this.changeGradientButton.style.border = contrastStyle.border;
+        this.changeGradientButton.style.boxShadow = contrastStyle.glow;
+        
+        // Update the after pseudo-element background color
+        const buttonStyle = document.createElement('style');
+        buttonStyle.innerHTML = `
+            #change-gradient::after {
+                background: ${contrastStyle.text === '#000000' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.2)'};
+            }
+        `;
+        
+        // Remove any previous style element we might have added
+        const oldStyle = document.getElementById('button-dynamic-style');
+        if (oldStyle) {
+            oldStyle.remove();
+        }
+        
+        // Add the new style element with an ID so we can find it later
+        buttonStyle.id = 'button-dynamic-style';
+        document.head.appendChild(buttonStyle);
     }
     
     emitGradientChangedEvent(colors) {
